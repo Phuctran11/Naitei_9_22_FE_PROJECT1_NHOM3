@@ -1,6 +1,7 @@
 import { SessionProvider } from "next-auth/react";
-import AuthProvider from "@/Components/Auth/AuthProvider";
-import ToastProvider from "@/Components/ToastProvider";
+import AuthProvider from "@/components/Auth/AuthProvider";
+import ToastProvider from "@/app/products/components/ToastProvider";
+import CompareProvider from "@/contexts/CompareContext";
 
 import "./globals.css";
 
@@ -13,8 +14,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider>
-          <ToastProvider />
-          {children}
+          <CompareProvider>
+            <ToastProvider />
+            {children}
+          </CompareProvider>
         </AuthProvider>
       </body>
     </html>

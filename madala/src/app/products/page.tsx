@@ -1,82 +1,214 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import ProductGrid from '@/components/ProductGrid';
-import ProductList from '@/components/ProductList';
-import Advertise from '@/components/Advertisement';
-import CategorySidebar from '@/components/CategorySidebar';
-import CompareBox from '@/components/CompareBox';
-import TagList from '@/components/TagList';
+import ProductGrid from '@/app/products/components/ProductGrid';
+import ProductList from '@/app/products/components/ProductList';
+import Advertisement from '@/app/products/components/Advertisement';
+import CategorySidebar from '@/app/products/components/CategorySidebar';
+import CompareBox from '@/app/products/components/CompareBox';
+import TagList from '@/app/products/components/TagList';
+import SaleBanner from '@/app/products/components/SaleBanner';
+import ViewToggle from '@/app/products/components/ViewToggle';
+import Pagination from '@/app/products/components/Pagination';
 import { IProduct } from '@/models/Product';
+import { ICategory } from '@/models/Category';
 
 const ProductPage = () => {
     const [products, setProducts] = useState<IProduct[]>([]);
+    const [categories, setCategories] = useState<ICategory[]>([]);
     const [filteredProducts, setFilteredProducts] = useState<IProduct[]>([]);
-    const [compareItems, setCompareItems] = useState<IProduct[]>([]);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
-    const [selectedTag, setSelectedTag] = useState<string>('');
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
 
-    // Extract unique categories and tags from products
-    const categories = Array.from(new Set(products.flatMap(p => p.categoryIds || [])));
-    const tags = Array.from(new Set(products.flatMap(p => p.tags || [])));
+    // MAX prod được hiển thị
+    const getProductsPerPage = () => {
+        return viewMode === 'list' ? 3 : 6; // max 3 prod cho list mode, 6 prod cho grid mode
+    };
 
+    // gộp tags từ sản phẩm, loại bỏ trùng hợp và chuyển thành mảng
+    const tags = Array.from(new Set(
+        Array.isArray(products) ? products.flatMap(p => p.tags || []) : []
+    ));
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                const categoriesRes = await fetch('/api/categories');
+                if (!categoriesRes.ok) {
+                    throw new Error('Failed to fetch categories');
+                }
+                const categoriesData = await categoriesRes.json();
+                const categories = Array.isArray(categoriesData) ? categoriesData : [];
+                setCategories(categories);
+
+                console.log('Fetched categories:', categories.length, categories);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An error occurred');
+                console.error('Error fetching data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    // Lấy toàn bộ sản phẩm lần đầu load page
     useEffect(() => {
         const fetchProducts = async () => {
             try {
                 setLoading(true);
                 setError(null);
-                const res = await fetch('/api/products');
-                
-                if (!res.ok) {
+
+                console.log('Initial load: Fetching all products');
+
+                const productsRes = await fetch('/api/products');
+                if (!productsRes.ok) {
                     throw new Error('Failed to fetch products');
                 }
-                
-                const data = await res.json();
-                setProducts(data);
-                setFilteredProducts(data);
+
+                const productsData = await productsRes.json();
+                const products = Array.isArray(productsData) ? productsData : [];
+
+                console.log('Initial fetch - products:', products.length, products);
+
+                setProducts(products);
+                setFilteredProducts(products);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'An error occurred');
-                console.error('Error fetching products:', err);
+                console.error('Error fetching initial products:', err);
             } finally {
                 setLoading(false);
             }
         };
+
         fetchProducts();
     }, []);
 
-    // Filter products based on selected category and tag
+    // Khi filter thay đổi 
     useEffect(() => {
-        let filtered = products;
-
-        if (selectedCategory) {
-            filtered = filtered.filter(product => 
-                product.categoryIds?.includes(selectedCategory)
-            );
+        if (selectedCategory === '' && selectedTags.length === 0) {
+            return;
         }
 
-        if (selectedTag) {
-            filtered = filtered.filter(product => 
-                product.tags?.includes(selectedTag)
-            );
-        }
+        const fetchProducts = async () => {
+            try {
+                setLoading(true);
+                setError(null);
 
-        setFilteredProducts(filtered);
-    }, [products, selectedCategory, selectedTag]);
+                // Tạo API với tham số
+                const params = new URLSearchParams();
+                if (selectedCategory) {
+                    params.append('category', selectedCategory);
+                }
+                if (selectedTags.length > 0) {
+                    params.append('tags', selectedTags.join(','));
+                }
+
+                const url = `/api/products${params.toString() ? '?' + params.toString() : ''}`;
+
+                console.log('Filters changed: Fetching products with URL:', url);
+
+                const productsRes = await fetch(url);
+                if (!productsRes.ok) {
+                    throw new Error('Failed to fetch products');
+                }
+
+                const productsData = await productsRes.json();
+                const products = Array.isArray(productsData) ? productsData : [];
+
+                console.log('Filter fetch - products:', products.length, products);
+
+                setProducts(products);
+                setFilteredProducts(products);
+                setCurrentPage(1); // reset về page 1 khi filter thay đổi
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An error occurred');
+                console.error('Error fetching filtered products:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, [selectedCategory, selectedTags]); 
+
 
     const handleCategorySelect = (category: string) => {
-        setSelectedCategory(selectedCategory === category ? '' : category);
+        console.log('Category selected:', category);
+        setSelectedCategory(category);
+        
+        // nếu không có tags được lựa chọn sẽ tự lấy tất cả sản phẩm
+        if (category === '' && selectedTags.length === 0) {
+            const fetchAllProducts = async () => {
+                try {
+                    setLoading(true);
+                    const productsRes = await fetch('/api/products');
+                    if (!productsRes.ok) throw new Error('Failed to fetch products');
+                    
+                    const productsData = await productsRes.json();
+                    const products = Array.isArray(productsData) ? productsData : [];
+                    
+                    console.log('Fetched all products:', products.length);
+                    setProducts(products);
+                    setFilteredProducts(products);
+                    setCurrentPage(1);
+                } catch (err) {
+                    setError(err instanceof Error ? err.message : 'An error occurred');
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchAllProducts();
+        }
     };
 
     const handleTagSelect = (tag: string) => {
-        setSelectedTag(selectedTag === tag ? '' : tag);
+        setSelectedTags(prevTags => {
+            if (prevTags.includes(tag)) {
+                // Nếu tag được chọn sẽ xóa trong array không hiển thị nữa
+                return prevTags.filter(t => t !== tag);
+            } else {
+                // Ngược lại
+                return [...prevTags, tag];
+            }
+        });
     };
+
+    const handleClearAllTags = () => {
+        setSelectedTags([]);
+    };
+
+    // Chức năng thêm vào giỏ hàng
+    const handleAddToCart = (product: IProduct) => {
+        console.log('Added to cart:', product);
+    };
+
+    // Chức năng yêu thích
+    const handleToggleFavorite = (product: IProduct) => {
+        console.log('Toggle favorite:', product);
+    };
+
+    // Phân trang
+    const productsPerPage = getProductsPerPage();
+    const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+    const startIndex = (currentPage - 1) * productsPerPage;
+    const currentProducts = filteredProducts.slice(startIndex, startIndex + productsPerPage);
+
+    // reset về page 1 khi đổi view mode
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [viewMode]);
 
     if (loading) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="text-lg">Loading products...</div>
+                <div className="text-lg">Đang tải sản phẩm...</div>
             </div>
         );
     }
@@ -84,49 +216,138 @@ const ProductPage = () => {
     if (error) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="text-red-500">Error: {error}</div>
+                <div className="text-red-500">Lỗi: {error}</div>
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
-            <aside className="col-span-1 space-y-4">
-                <CategorySidebar 
-                    categories={categories}
-                    selectedCategory={selectedCategory}
-                    onSelectCategory={handleCategorySelect}
-                />
-                <TagList 
-                    tags={tags}
-                    selectedTag={selectedTag}
-                    onSelectTag={handleTagSelect}
-                />
-                <CompareBox items={compareItems} />
-                <Advertise />
-            </aside>
+        <div className="min-h-screen bg-gray-50">
+            <SaleBanner />
 
-            <main className="col-span-1 lg:col-span-3">
-                <div className="flex justify-end mb-4">
-                    <button 
-                        onClick={() => setViewMode('grid')} 
-                        className={`mr-2 px-4 py-2 rounded ${viewMode === 'grid' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-                    >
-                        Grid
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('list')}
-                        className={`px-4 py-2 rounded ${viewMode === 'list' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-                    >
-                        List
-                    </button>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="lg:hidden space-y-6">
+                    <CategorySidebar
+                        categories={categories}
+                        selectedCategory={selectedCategory}
+                        onSelectCategory={handleCategorySelect}
+                    />
+                    <CompareBox categories={categories} />
+                    <TagList
+                        tags={tags}
+                        selectedTags={selectedTags}
+                        onSelectTag={handleTagSelect}
+                        onClearAllTags={handleClearAllTags}
+                    />
+
+                    <div>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-4">
+                                <ViewToggle viewMode={viewMode} onViewChange={setViewMode} />
+                                <span className="text-sm text-gray-600">
+                                    {filteredProducts.length} sản phẩm
+                                </span>
+                            </div>
+                            
+                            <div className="flex items-center">
+                                {totalPages > 1 && (
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        onPageChange={setCurrentPage}
+                                        isCompact={true}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {viewMode === 'grid' ? (
+                            <ProductGrid
+                                products={currentProducts}
+                                onAddToCart={handleAddToCart}
+                                onToggleFavorite={handleToggleFavorite}
+                            />
+                        ) : (
+                            <ProductList
+                                products={currentProducts}
+                                onAddToCart={handleAddToCart}
+                                onToggleFavorite={handleToggleFavorite}
+                            />
+                        )}
+
+                        {totalPages > 1 && (
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                                isCompact={false}
+                            />
+                        )}
+                    </div>
                 </div>
-                {viewMode === 'grid' ? (
-                    <ProductGrid products={filteredProducts} />
-                ) : (
-                    <ProductList products={filteredProducts} />
-                )}
-            </main>
+
+                <div className="hidden lg:grid lg:grid-cols-4 gap-8">
+                    <aside className="col-span-1 space-y-6">
+                        <CategorySidebar
+                            categories={categories}
+                            selectedCategory={selectedCategory}
+                            onSelectCategory={handleCategorySelect}
+                        />
+                        <CompareBox categories={categories} />
+                        <TagList
+                            tags={tags}
+                            selectedTags={selectedTags}
+                            onSelectTag={handleTagSelect}
+                            onClearAllTags={handleClearAllTags}
+                        />
+                        <Advertisement />
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="col-span-3">
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-4">
+                                <ViewToggle viewMode={viewMode} onViewChange={setViewMode} />
+                                <span className="text-sm text-gray-600">
+                                    {filteredProducts.length} sản phẩm
+                                </span>
+                            </div>
+                            <div className="flex items-center">
+                                {totalPages > 1 && (
+                                    <Pagination
+                                        currentPage={currentPage}
+                                        totalPages={totalPages}
+                                        onPageChange={setCurrentPage}
+                                        isCompact={true}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {viewMode === 'grid' ? (
+                            <ProductGrid
+                                products={currentProducts}
+                                onAddToCart={handleAddToCart}
+                                onToggleFavorite={handleToggleFavorite}
+                            />
+                        ) : (
+                            <ProductList
+                                products={currentProducts}
+                                onAddToCart={handleAddToCart}
+                                onToggleFavorite={handleToggleFavorite}
+                            />
+                        )}
+                        {totalPages > 1 && (
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                                isCompact={false}
+                            />
+                        )}
+                    </main>
+                </div>
+            </div>
         </div>
     );
 };
