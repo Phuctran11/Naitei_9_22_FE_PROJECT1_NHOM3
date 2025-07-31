@@ -1,5 +1,5 @@
 import { SessionProvider } from "next-auth/react";
-import AuthProvider from "@/components/Auth/AuthProvider";
+import AuthProvider from "@/Components/Auth/AuthProvider";
 import ToastProvider from "@/app/products/components/ToastProvider";
 import CompareProvider from "@/contexts/CompareContext";
 

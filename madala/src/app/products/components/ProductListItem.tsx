@@ -1,7 +1,8 @@
 'use client';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { IProduct } from '@/models/Product';
-import { FaHeart, FaShoppingCart } from 'react-icons/fa';
+import { FaHeart, FaShoppingCart, FaBalanceScale } from 'react-icons/fa';
 import SafeImage from '@/app/products/components/SafeImage';
 import StarRating from '@/app/products/components/StarRating';
 import { useCompare } from '@/contexts/CompareContext';
@@ -19,7 +20,8 @@ const ProductListItem: React.FC<ProductListItemProps> = ({
   onAddToCart, 
   onToggleFavorite 
 }) => {
-  const { isInCompare, addToCompare } = useCompare();
+  const router = useRouter();
+  const { isInCompare, addToCompare, removeFromCompare } = useCompare();
   const hasDiscount = product.salePrice < product.price;
   const discountPercent = hasDiscount 
     ? Math.round(((product.price - product.salePrice) / product.price) * 100)
@@ -27,8 +29,23 @@ const ProductListItem: React.FC<ProductListItemProps> = ({
 
   const isProductInCompare = isInCompare(String(product._id));
 
+  const handleCompareClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const productId = String(product._id) || product.productId || product.id;
+    
+    if (isProductInCompare) {
+      // Nếu đã có trong danh sách so sánh, loại bỏ
+      removeFromCompare(productId);
+    } else {
+      // Nếu chưa có, thêm vào danh sách so sánh
+      addToCompare(product);
+    }
+  };
+
   const handleProductClick = () => {
-    addToCompare(product);
+    // Navigate to product detail page
+    const productId = String(product._id) || product.productId || product.id;
+    router.push(`/products/${productId}`);
   };
 
   return (
@@ -48,7 +65,7 @@ const ProductListItem: React.FC<ProductListItemProps> = ({
             alt={product.name}
             width={200}
             height={200}
-            className="w-full h-48 md:h-32 object-cover rounded-lg transition-transform duration-300"
+            className="w-full h-48 md:h-32 object-cover rounded-lg transition-transform duration-300 group-hover/image:scale-105"
             fallbackClassName="w-full h-48 md:h-32 rounded-lg"
           />
           
@@ -59,21 +76,18 @@ const ProductListItem: React.FC<ProductListItemProps> = ({
             </div>
           )}
 
-          {/* Compare Badge */}
-          {isProductInCompare && (
-            <div className="absolute top-2 right-2 bg-[#8ba63a] text-white px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1">
-              ✓ Đã chọn
-            </div>
-          )}
-
-          {/* Click to compare hint for list view - Only shows on image hover */}
-          {!isProductInCompare && (
-            <div className="absolute inset-0 bg-transparent transition-all duration-300 flex items-center justify-center rounded-lg pointer-events-none">
-              <div className="opacity-0 group-hover/image:opacity-100 transition-all duration-300 bg-white hover:bg-[#8ba63a] hover:text-white bg-opacity-95 px-3 py-1 rounded-lg text-xs font-medium text-gray-700 shadow-lg pointer-events-auto cursor-pointer">
-                So sánh
-              </div>
-            </div>
-          )}
+          {/* Button So sánh ở góc trên bên phải */}
+          <button
+            onClick={handleCompareClick}
+            className={`absolute top-2 right-2 p-1 rounded-full transition-all duration-300 ${
+              isProductInCompare 
+                ? 'bg-[#8ba63a] text-white hover:bg-red-500' 
+                : 'bg-white bg-opacity-90 text-gray-600 hover:bg-[#8ba63a] hover:text-white'
+            }`}
+            title={isProductInCompare ? 'Bỏ khỏi danh sách so sánh' : 'Thêm vào so sánh'}
+          >
+            <FaBalanceScale className="text-xs" />
+          </button>
         </div>
 
         {/* Product Info */}
@@ -86,7 +100,10 @@ const ProductListItem: React.FC<ProductListItemProps> = ({
             </p>
 
             {/* Product Name */}
-            <h3 className="font-semibold text-lg text-gray-800 mb-2">
+            <h3 
+              className="font-semibold text-lg text-gray-800 mb-2 cursor-pointer hover:text-[#8ba63a] transition-colors"
+              onClick={handleProductClick}
+            >
               {product.name}
             </h3>
 

@@ -6,7 +6,7 @@ import saleBannerImg from '../../../../public/products/sale-banner.jpg';
 const SaleBanner = () => {
   return (
     <div className="w-full mb-6 lg:mb-8">
-      <div className="relative overflow-hidden rounded-lg shadow-lg">
+      <div className="relative overflow-hidden shadow-lg">
         {/* Background Image */}
         <Image
           src={saleBannerImg}

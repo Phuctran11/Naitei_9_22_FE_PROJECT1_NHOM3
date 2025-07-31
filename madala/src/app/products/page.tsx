@@ -11,6 +11,8 @@ import ViewToggle from '@/app/products/components/ViewToggle';
 import Pagination from '@/app/products/components/Pagination';
 import { IProduct } from '@/models/Product';
 import { ICategory } from '@/models/Category';
+import { productService } from '@/services/productService';
+import { categoryService } from '@/services/categoryService';
 
 const ProductPage = () => {
     const [products, setProducts] = useState<IProduct[]>([]);
@@ -39,12 +41,8 @@ const ProductPage = () => {
                 setLoading(true);
                 setError(null);
 
-                const categoriesRes = await fetch('/api/categories');
-                if (!categoriesRes.ok) {
-                    throw new Error('Failed to fetch categories');
-                }
-                const categoriesData = await categoriesRes.json();
-                const categories = Array.isArray(categoriesData) ? categoriesData : [];
+                // Sử dụng categoryService
+                const categories = await categoryService.getAllCategories();
                 setCategories(categories);
 
                 console.log('Fetched categories:', categories.length, categories);
@@ -67,13 +65,8 @@ const ProductPage = () => {
 
                 console.log('Initial load: Fetching all products');
 
-                const productsRes = await fetch('/api/products');
-                if (!productsRes.ok) {
-                    throw new Error('Failed to fetch products');
-                }
-
-                const productsData = await productsRes.json();
-                const products = Array.isArray(productsData) ? productsData : [];
+                // Sử dụng productService 
+                const products = await productService.getAllProducts();
 
                 console.log('Initial fetch - products:', products.length, products);
 
@@ -92,35 +85,36 @@ const ProductPage = () => {
 
     // Khi filter thay đổi 
     useEffect(() => {
-        if (selectedCategory === '' && selectedTags.length === 0) {
-            return;
-        }
-
         const fetchProducts = async () => {
             try {
                 setLoading(true);
                 setError(null);
 
-                // Tạo API với tham số
-                const params = new URLSearchParams();
-                if (selectedCategory) {
-                    params.append('category', selectedCategory);
+                console.log('Filters changed: Fetching products with category:', selectedCategory, 'and tags:', selectedTags);
+
+                let products: IProduct[];
+
+                // Kiểm tra nếu không có filter nào được chọn
+                if (selectedCategory === '' && selectedTags.length === 0) {
+                    // Không có filter nào - lấy tất cả sản phẩm
+                    products = await productService.getAllProducts();
+                    console.log('No filters - fetching all products:', products.length);
+                } else {
+                    // Có filter - sử dụng productService với logic Advanced (match với route API thực tế)
+                    if (selectedCategory && selectedTags.length > 0) {
+                        // Có cả category và tags - sử dụng logic phức tạp từ route
+                        products = await productService.getProductsByCategoryAndTagsAdvanced(selectedCategory, selectedTags);
+                    } else if (selectedCategory) {
+                        // Chỉ có category - route sẽ tự động handle subcategories nếu level 1
+                        products = await productService.getProductsByCategoryAdvanced(selectedCategory);
+                    } else if (selectedTags.length > 0) {
+                        // Chỉ có tags - sử dụng logic từ route
+                        products = await productService.getProductsByTagsAdvanced(selectedTags);
+                    } else {
+                        // Fallback
+                        products = await productService.getAllProducts();
+                    }
                 }
-                if (selectedTags.length > 0) {
-                    params.append('tags', selectedTags.join(','));
-                }
-
-                const url = `/api/products${params.toString() ? '?' + params.toString() : ''}`;
-
-                console.log('Filters changed: Fetching products with URL:', url);
-
-                const productsRes = await fetch(url);
-                if (!productsRes.ok) {
-                    throw new Error('Failed to fetch products');
-                }
-
-                const productsData = await productsRes.json();
-                const products = Array.isArray(productsData) ? productsData : [];
 
                 console.log('Filter fetch - products:', products.length, products);
 
@@ -148,11 +142,8 @@ const ProductPage = () => {
             const fetchAllProducts = async () => {
                 try {
                     setLoading(true);
-                    const productsRes = await fetch('/api/products');
-                    if (!productsRes.ok) throw new Error('Failed to fetch products');
-                    
-                    const productsData = await productsRes.json();
-                    const products = Array.isArray(productsData) ? productsData : [];
+                    // Sử dụng productService
+                    const products = await productService.getAllProducts();
                     
                     console.log('Fetched all products:', products.length);
                     setProducts(products);
